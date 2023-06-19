@@ -10,6 +10,9 @@
 # ignore directory
 freegs/
 
+# ignore dataset
+dataset/*
+
 # Created by git when using merge tools for conflicts
 *.BACKUP.*
 *.BASE.*
