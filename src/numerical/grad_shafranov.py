@@ -1,42 +1,139 @@
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
-from ._computes import *
-from typing import Dict
+from typing import Dict, Optional, Literal
 from tqdm import tqdm
 
-class GSMatrix(object):
-    def __init__(self, Rl, Rr, Zl, Zr):
+class ElipticOperator:
+    def __init__(self, Rl:float, Rr:float, Zl:float, Zr:float, Nr : int, Nz : int, order:Literal['2nd', '4th'] = '4th'):
         self.Rl = Rl
         self.Rr = Rr
         self.Zl = Zl
         self.Zr = Zr
-
-    def __call__(self, Nr, Nz):
         
+        self.Nr = Nr
+        self.Nz = Nz
+        
+        self.order = order
+        self.operator = None
+        
+        # coefficient for 4th order
+        self.centred_1st = [(-2, 1.0 / 12), (-1, -8.0 / 12), (1, 8.0 / 12), (2, -1.0 / 12)]
+
+        self.offset_1st = [
+            (-1, -3.0 / 12),
+            (0, -10.0 / 12),
+            (1, 18.0 / 12),
+            (2, -6.0 / 12),
+            (3, 1.0 / 12),
+        ]
+
+        # Coefficients for second derivatives
+        # (index offset, weight)
+        self.centred_2nd = [
+            (-2, -1.0 / 12),
+            (-1, 16.0 / 12),
+            (0, -30.0 / 12),
+            (1, 16.0 / 12),
+            (2, -1.0 / 12),
+        ]
+
+        self.offset_2nd = [
+            (-1, 10.0 / 12),
+            (0, -15.0 / 12),
+            (1, -4.0 / 12),
+            (2, 14.0 / 12),
+            (3, -6.0 / 12),
+            (4, 1.0 / 12),
+        ]
+        
+        self.generate_operator(Nr,Nz,order)
+    
+    def generate_operator(self, Nr, Nz, order:Literal['2nd', '4th'] = '4th'):
+        
+        if self.Nr == Nr and self.Nz == Nz and self.order == order:
+            return
+
         dr = (self.Rr - self.Rl) / (Nr - 1)
         dz = (self.Zr - self.Zl) / (Nz - 1)
 
         N_total = Nr * Nz
+        
+        invdr = 1.0 / dr
+        invdr2 = 1.0 / dr ** 2
+        
+        invdz = 1.0 / dz
+        invdz2 = 1.0 / dz ** 2
 
-        a1 = dr**2 / (dr**2 + dz**2)
-        a2 = dz**2 / (dr**2 + dz**2)
-        a3 = dr**2 * dz**2 / (dr**2 + dz**2)
         A = np.zeros((N_total, N_total))
         
-        # setting A
-        for idx_r in range(1, Nr - 1):
-            # psi[idx_r, idx_z]
-            for idx_z in range(1, Nz - 1):
-                R = self.Rl + dr * idx_r
-                row = Nz * idx_r + idx_z
-                drow = Nz
-                A[row, row - 1] = a1 * 0.5
-                A[row, row + 1] = a1 * 0.5
-                A[row, row - drow] = a2 * (1 + dr / 2 / R) * 0.5
-                A[row, row + drow] = a2 * (1 - dr / 2 / R) * 0.5   
+        if self.order == '2nd':     
+            for idx_r in range(1, Nr - 1):
+                for idx_z in range(1, Nz - 1):
+                    R = self.Rl + dr * idx_r
+                    row = Nz * idx_r + idx_z
+                    drow = Nz
+                    A[row, row - 1] = invdz2
+                    A[row, row + 1] = invdz2
+                    A[row, row] = -2.0 * (invdr2 + invdz2)
+                    A[row, row - drow] = (invdr2 + invdr / 2 / R)
+                    A[row, row + drow] = (invdr2 - invdr / 2 / R) 
+        else:
+            for idx_r in range(1, Nr - 1):
+                for idx_z in range(1, Nz - 1):
+                    R = self.Rl + dr * idx_r
+                    row = Nz * idx_r + idx_z
+                    drow = Nz
+                    
+                    if idx_z == 1:
+                        for offset, weight in self.offset_2nd:
+                            A[row, row + offset] += weight * invdz2
+                    elif idx_z == Nz - 2:
+                        for offset, weight in self.offset_2nd:
+                            A[row, row - offset] += weight * invdz2
+                    else:
+                        for offset, weight in self.centred_2nd:
+                            A[row, row + offset] += weight * indvz2
+                        
+                    if idx_r == 1;
+                        for offset, weight in self.offset_2nd:
+                            A[row, row + offset * Nz] += weight * invdr2
+                        for offset, weight in self.offset_1st:
+                            A[row, row + offset * Nz] -= weight * invdr1 / R
+                    elif idx_r == nr - 2:
+                        for offset, weight in self.offset_2nd:
+                            A[row, row - offset * Nz] += weight * invdr2
+                        for offset, weight in self.offset_1st:
+                            A[row, row - offset * Nz] += weight * invdr1 / R
+                    else:
+                        for offset, weight in self.centred_2nd:
+                            A[row, row + offset * Nz] += weight * invdr2
+                        for offset, weight in self.centred_1st:
+                            A[row, row + offset * Nz] -= weight * invdr1 / R
+                            
+            # boundary
+            for idx_r in range(Nr):
+                for idx_z in [0,Nz-1]:
+                    row = idx_r * Nz + idx_z
+                    A[row,row] = 1.0
+            
+            for idx_r in [0, Nr - 1]:
+                for idx_z in range(Nz):
+                    row = idx_r * Nz + idx_z
+                    A[row,row] = 1.0
+                    
+        self.operator = A
+    
+    def get_matrix(self):
+        return self.operator
 
-        return A
+    def __call__(self, psi : np.ndarray):
+        
+        if psi.ndim == 2:
+            psi = psi.reshape(-1,1) 
+        
+        return np.matmul(self.operator, psi).reshape(self.Nr, self.Nz)
+
 
 class GSsolver(object):
     def __init__(self, 
@@ -206,8 +303,6 @@ class GSsolver(object):
         plt.colorbar()
 
         plt.savefig(save_dir)
-
-
 
 class GSsolverFreeBoundary(object):
     def __init__(self, Rl, Rr, Zl, Zr, m, n, beta_0, lamda_0, mu = MU, w  = 1.0, source : Dict[str, float] = None):

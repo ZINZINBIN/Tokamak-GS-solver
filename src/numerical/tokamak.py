@@ -1,10 +1,10 @@
 import numpy as np
 import scipy as sp
-from ._computes import *
-from .grad_shafranov import *
-from .boundary import *
-from .profiles import *
-from .source import *
+from src.numerical.compute import *
+from src.numerical.grad_shafranov import *
+from src.numerical.boundary import *
+from src.numerical.profiles import *
+from src.numerical.source import *
 
 # Tokamak Environment
 class Tokamak(object):

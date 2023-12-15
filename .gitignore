@@ -13,6 +13,9 @@ freegs/
 # ignore dataset
 dataset/*
 
+# ignore weights
+weights/*
+
 # Created by git when using merge tools for conflicts
 *.BACKUP.*
 *.BASE.*

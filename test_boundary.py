@@ -2,8 +2,8 @@ import argparse
 import os
 import sys
 import math
-from src.grad_shafranov import *
-from src.tokamak import *
+from src.numerical.grad_shafranov import *
+from src.numerical.tokamak import *
 
 parser = argparse.ArgumentParser(description='Input argument for boundary plasma in Tokamak')
 

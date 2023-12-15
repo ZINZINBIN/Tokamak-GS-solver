@@ -53,6 +53,51 @@ class AbstractPINN(nn.Module):
     
     def compute_field_decay_index(self):
         return NotImplementedError('PINN::compute_field_decay_index()')
+
+class ResBlockLinear(nn.Module):
+    def __init__(self, in_channels : int, out_channels : int):
+        super().__init__()
+        self.linear1 = nn.Linear(in_channels, out_channels)
+        self.norm1 = nn.LayerNorm(out_channels)
+        self.linear2 = nn.Linear(out_channels, out_channels)
+        self.norm2 = nn.LayerNorm(out_channels)
+
+        self.downsample = nn.Linear(in_channels, out_channels)
+        
+    def forward(self, x : torch.Tensor):
+        out = self.linear1(x)
+        out = self.norm1(out)
+        out = F.relu(out)
+        out = self.linear2(out)
+        out = self.norm2(out)
+        
+        x = self.downsample(x)
+        out = out + x
+        out = F.relu(out)
+        return out
+
+class ResBlockCNN(nn.Module):
+    def __init__(self, in_channels : int, out_channels : int):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding = 1, stride = 1)
+        self.norm1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding = 1, stride = 1)
+        self.norm2 = nn.BatchNorm2d(out_channels)
+        
+        self.downsample = nn.Conv2d(in_channels, out_channels, kernel_size = 1)
+        
+    def forward(self, x : torch.Tensor):
+        out = self.conv1(x)
+        out = self.norm1(out)
+        out = F.relu(out)
+        out = self.conv2(out)
+        out = self.norm2(out)
+        
+        x = self.downsample(x)
+        
+        out = out + x
+        out = F.relu(out)
+        return out
     
 class Encoder(nn.Module):
     def __init__(self, nx : int, ny : int):
@@ -63,13 +108,8 @@ class Encoder(nn.Module):
             nn.LayerNorm((nx,ny)),
             nn.ReLU(),
         )
-        self.conv_layer = nn.Sequential(
-            nn.Conv2d(1, 16, 5, 3),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, 5, 3),
-            nn.ReLU(),
-        )
-        
+    
+        self.conv_layer = ResBlockCNN(1, 32)
         input_dim = self.compute_hidden_dim()
         
         self.regressor = nn.Sequential(
@@ -206,19 +246,12 @@ class PINN(AbstractPINN):
             nn.LayerNorm(hidden_dim),
             nn.LeakyReLU(0.01),
         )
-        self.connector = nn.Sequential(
-            nn.Linear(hidden_dim * 3, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.LeakyReLU(0.01),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.LeakyReLU(0.01),
-        )
+        
+        self.connector = ResBlockLinear(hidden_dim * 3, hidden_dim)
         
         # Decoder : predict the psi from the encoded vectors
         self.decoder = nn.Sequential(
-            nn.Linear(hidden_dim , hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.LeakyReLU(0.01),
+            ResBlockLinear(hidden_dim, hidden_dim),
             nn.Linear(hidden_dim, nx * ny),
         )
         

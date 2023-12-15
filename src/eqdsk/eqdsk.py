@@ -11,7 +11,6 @@ from shutil import copyfile, move
 import subprocess
 #from exec_dirs import chease_exec
 
-
 currdir = os.getcwd()
 e0 = 1.601 * 1.e-19;
 mu0 = 4.0 * np.pi * 1.e-7;

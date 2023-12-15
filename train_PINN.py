@@ -33,6 +33,7 @@ def parsing():
     parser.add_argument("--gamma", type = float, default = 0.995)
     
     # pprime and ffprime profile
+    parser.add_argument("--learnable-profile", type = bool, default = False)
     parser.add_argument("--alpha_m", type = int, default = 2)
     parser.add_argument("--alpha_n", type = int, default = 1)
     parser.add_argument("--beta_m", type = int, default = 2)
@@ -67,12 +68,6 @@ print("torch device num : ", torch.cuda.device_count())
 # torch cuda initialize and clear cache
 torch.cuda.init()
 torch.cuda.empty_cache()
-
-# device allocation
-if(torch.cuda.device_count() >= 1):
-    device = "cuda:{}".format(0)
-else:
-    device = 'cpu'
     
 cols_PFC = ['\PCPF1U', '\PCPF2U', '\PCPF3U', '\PCPF3L', '\PCPF4U','\PCPF4L', '\PCPF5U', '\PCPF5L', '\PCPF6U', '\PCPF6L', '\PCPF7U']
 cols_0D = ['\\ipmhd', '\\q95','\\betap', '\li',]
@@ -81,6 +76,12 @@ if __name__ == "__main__":
     
     args = parsing()
     
+    # device allocation
+    if(torch.cuda.device_count() >= 1):
+        device = "cuda:{}".format(args['gpu_num'])
+    else:
+        device = 'cpu'
+        
     df = pd.read_csv("./dataset/KSTAR_rl_GS_solver.csv")
     df_train, df_valid = train_test_split(df, test_size = 0.4)
     df_valid, df_test = train_test_split(df_valid, test_size=0.5)
@@ -152,7 +153,6 @@ if __name__ == "__main__":
     
     model.train()
     
-    
     print("============= Training process =============")
     train(
         train_loader,
@@ -169,6 +169,13 @@ if __name__ == "__main__":
         weights=weights
     )
     
+    print("=============== Profile Info ================")
+    print("alpha_m : ", model.alpha_m)
+    print("alpha_n : ", model.alpha_n)
+    print("beta_m : ", model.beta_m)
+    print("beta_n : ", model.beta_n)
+    print("beta : ", model.beta.detach().cpu().item())
+    print("lamda : ", model.lamda.detach().cpu().item())
     
     model.eval()
     model.load_state_dict(torch.load("./weights/{}_best.pt".format(args['tag'])))
